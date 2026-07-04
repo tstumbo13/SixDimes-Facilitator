@@ -135,6 +135,7 @@ function render(){
   NAV.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===VIEW||(VIEW==="session"&&b.dataset.v==="home")));
   if(VIEW==="home")renderHome();
   else if(VIEW==="session")renderSession(SESSION);
+  else if(VIEW==="book")renderBook();
   else if(VIEW==="journal")renderJournal();
   else if(VIEW==="mywork")renderMyWork();
   else if(VIEW==="support")renderSupport();
@@ -206,7 +207,7 @@ function renderHome(){
     <div class="card">
       <h3>The book</h3>
       <p class="muted" style="font-size:.85rem"><i>Six Dimes and a Nickel: Life Lessons to Empower Change</i> by Damon West — the full book, right here. Every session links to its chapter.</p>
-      <a class="btn sec small" style="display:inline-block;text-decoration:none;text-align:center;margin-top:8px" href="book.pdf" target="_blank" rel="noopener">Read the book</a>
+      <button class="btn sec small" style="margin-top:8px" onclick="openBook(1,'home',0)">Read the book</button>
     </div>
   </div>`;
 }
@@ -242,8 +243,7 @@ function renderSession(n){
     <div class="quote">"${esc(s.quote)}"<span class="who">— ${esc(s.attrib)}</span></div>
     <div class="sect"><h3>Before you begin</h3></div>
     <p class="muted">Read ${esc(chapRead(s))} first, then answer in your own words.</p>
-    <a class="btn sec" style="text-align:center;text-decoration:none;margin:10px 0 4px;padding:11px 16px;font-size:.92rem" href="book.pdf#page=${s.bookPage}" target="_blank" rel="noopener">Open ${esc(chapRead(s))} in the book</a>
-    <p class="tiny" style="text-align:center;margin:0 0 4px">Opens the full book PDF — jumps to page ${s.bookPage} on most devices.</p>
+    <button class="btn sec" style="margin:10px 0 4px;padding:11px 16px;font-size:.92rem" onclick="openBook(${s.bookPage},'session',${n})">Open ${esc(chapRead(s))} in the book</button>
     <label class="f">One-sentence summary<span class="hint"> — what was this chapter about, in your own words?</span><textarea data-w="s${n}.r0"></textarea></label>
     <label class="f">What hit me<span class="hint"> — one line or moment that stuck, and why.</span><textarea data-w="s${n}.r1"></textarea></label>
     <label class="f">Where I see myself<span class="hint"> — what part of Damon's experience lines up with your own story?</span><textarea data-w="s${n}.r2"></textarea></label>
@@ -395,6 +395,60 @@ function renderSettings(){
 }
 function setTrack(t){ST.track=t;save();renderSettings();}
 function wipe(){if(confirm("Erase all your writing and progress from this device? This cannot be undone.")){localStorage.removeItem(KEY);ST=load();OB=0;OBTRACK="";go("home");}}
+/* ---------- book reader ---------- */
+let BOOK={page:1,from:"home",fromArg:0,doc:null};
+function openBook(p,from,fromArg){BOOK.page=p;BOOK.from=from;BOOK.fromArg=fromArg;go("book");}
+function bookBack(){if(BOOK.from==="session"){go("session",BOOK.fromArg);}else{go("home");}}
+function bookNav(d){if(!BOOK.doc)return;const t=BOOK.page+d;if(t<1||t>BOOK.doc.numPages)return;BOOK.page=t;bookRender();}
+function bookLib(){
+  return new Promise((res,rej)=>{
+    if(window.pdfjsLib)return res();
+    const sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    sc.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";res();};
+    sc.onerror=rej;
+    document.head.appendChild(sc);
+  });
+}
+function renderBook(){
+  APP.innerHTML=`<div class="topbar"><button class="back" onclick="bookBack()">‹ Back</button><h2>Six Dimes and a Nickel — the book</h2></div>
+  <div class="wrap" style="max-width:680px">
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px">
+      <button class="btn sec small" onclick="bookNav(-1)">‹ Prev</button>
+      <span class="tiny" id="bkpage" style="min-width:110px;text-align:center">Page ${BOOK.page}</span>
+      <button class="btn sec small" onclick="bookNav(1)">Next ›</button>
+    </div>
+    <div id="bkhold" style="text-align:center"><p class="muted" id="bkmsg">Loading the book…</p><canvas id="bkcanvas" style="max-width:100%;border:1px solid var(--line);border-radius:8px"></canvas></div>
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px">
+      <button class="btn sec small" onclick="bookNav(-1)">‹ Prev</button>
+      <button class="btn sec small" onclick="bookNav(1)">Next ›</button>
+    </div>
+  </div>`;
+  bookRender();
+}
+function bookRender(){
+  const msg=document.getElementById("bkmsg"),cv=document.getElementById("bkcanvas");
+  const setLbl=()=>{const pl=document.getElementById("bkpage");if(pl)pl.textContent="Page "+BOOK.page+(BOOK.doc?" of "+BOOK.doc.numPages:"");};
+  setLbl();
+  bookLib()
+  .then(()=>BOOK.doc?BOOK.doc:pdfjsLib.getDocument("book.pdf").promise.then(d=>{BOOK.doc=d;return d;}))
+  .then(doc=>{
+    if(VIEW!=="book")return;
+    setLbl();
+    return doc.getPage(Math.min(BOOK.page,doc.numPages)).then(page=>{
+      if(VIEW!=="book")return;
+      const hold=document.getElementById("bkhold");
+      const w=Math.min((hold?hold.clientWidth:360)||360,680);
+      const dpr=window.devicePixelRatio||1;
+      const vp1=page.getViewport({scale:1});
+      const vp=page.getViewport({scale:(w-2)/vp1.width*dpr});
+      cv.width=vp.width;cv.height=vp.height;cv.style.width=(vp.width/dpr)+"px";
+      if(msg)msg.style.display="none";
+      return page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+    });
+  })
+  .catch(()=>{if(msg){msg.style.display="block";msg.innerHTML='Couldn&#39;t load the reader here. <a href="book.pdf" target="_blank" rel="noopener">Open the PDF directly</a> instead.';}});
+}
 /* ---------- boot ---------- */
 render();
 if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{});}
@@ -435,6 +489,7 @@ render=function(){
     NAV.classList.add("hidden");
     if(!FACOK){renderFacPin();return;}
     if(VIEW==="facsession"){renderFacSession(SESSION);return;}
+    if(VIEW==="book"){renderBook();return;}
     if(VIEW==="support"){baseRender();const w=APP.querySelector(".wrap");if(w)w.insertAdjacentHTML("afterbegin",`<button class="back" style="background:none;border:none;color:var(--teal);font-weight:600;font-size:1rem;cursor:pointer;padding:0 0 8px">‹ Back to sessions</button>`),w.querySelector(".back").onclick=()=>go("fachome");return;}
     renderFacHome();return;
   }
