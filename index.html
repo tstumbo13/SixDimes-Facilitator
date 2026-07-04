@@ -398,7 +398,7 @@ function wipe(){if(confirm("Erase all your writing and progress from this device
 /* ---------- book reader ---------- */
 let BOOK={page:1,from:"home",fromArg:0,doc:null};
 function openBook(p,from,fromArg){BOOK.page=p;BOOK.from=from;BOOK.fromArg=fromArg;go("book");}
-function bookBack(){if(BOOK.from==="session"){go("session",BOOK.fromArg);}else{go("home");}}
+function bookBack(){go(BOOK.from||"home",(BOOK.from==="session"||BOOK.from==="facsession")?BOOK.fromArg:null);}
 function bookNav(d){if(!BOOK.doc)return;const t=BOOK.page+d;if(t<1||t>BOOK.doc.numPages)return;BOOK.page=t;bookRender();}
 function bookLib(){
   return new Promise((res,rej)=>{
@@ -535,7 +535,8 @@ function renderFacHome(){
     <div class="card" style="margin-top:14px">
       ${SS.map(s=>`<div class="facrow" onclick="go('facsession',${s.num})"><div class="num">${s.num}</div><div class="t"><b>${esc(s.title)}</b><span>${esc(s.chapter.split(":")[0])} · ${esc(s.value)}</span></div><span style="color:var(--faint)">›</span></div>`).join("")}
     </div>
-    <button class="btn sec" onclick="VIEW='support';render()">Crisis and support resources</button>
+    <button class="btn sec" onclick="openBook(1,'fachome',0)">Read the book</button>
+    <button class="btn sec" style="margin-top:10px" onclick="VIEW='support';render()">Crisis and support resources</button>
     <a class="btn sec" style="display:block;text-align:center;text-decoration:none;margin-top:10px" href="https://tstumbo13.github.io/SixDimes/" target="_blank" rel="noopener">The guest app — share this link with guests</a>
     <p class="tiny" style="text-align:center;margin-top:12px">Session content is drawn verbatim from the Six Dimes and a Nickel Facilitator Guide. Document in KIPU per program policy.</p>
   </div>`;
@@ -557,6 +558,7 @@ function renderFacSession(n){
     <span class="chip">${esc(s.value)}</span>
     <p class="muted" style="margin-top:8px">${esc(f.why)}</p>
     <div class="quote">"${esc(s.quote)}"<span class="who">— ${esc(s.attrib)}</span></div>
+    <button class="btn sec" style="margin-top:10px;padding:11px 16px;font-size:.92rem" onclick="facStop();openBook(${s.bookPage},'facsession',${n})">Open ${esc(s.chapter.split(":")[0])} in the book</button>
     <details class="fold" open><summary>Before group</summary>
       ${f.before.map(b=>`<label class="checkitem"><input type="checkbox"><span>${esc(b)}</span></label>`).join("")}</details>
     <details class="fold"><summary>Confidentiality script (read aloud)</summary>
